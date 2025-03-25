@@ -1,7 +1,6 @@
 package com.linkedin.postservice.controller;
 
 
-import com.linkedin.postservice.dto.PostDTO;
 import com.linkedin.postservice.service.PostLikeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

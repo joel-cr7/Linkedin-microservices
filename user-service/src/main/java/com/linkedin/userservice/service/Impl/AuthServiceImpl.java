@@ -4,8 +4,8 @@ import com.linkedin.userservice.dto.LoginRequestDTO;
 import com.linkedin.userservice.dto.SignupRequestDTO;
 import com.linkedin.userservice.dto.UserDTO;
 import com.linkedin.userservice.entity.User;
+import com.linkedin.userservice.event.UserCreatedEvent;
 import com.linkedin.userservice.exception.BadRequestException;
-import com.linkedin.userservice.exception.ResourceNotFoundException;
 import com.linkedin.userservice.repository.UserRepository;
 import com.linkedin.userservice.service.AuthService;
 import com.linkedin.userservice.service.JWTService;
@@ -13,6 +13,7 @@ import com.linkedin.userservice.utils.BCrypt;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 
@@ -23,6 +24,7 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
     private final JWTService jwtService;
+    private final KafkaTemplate<Long, UserCreatedEvent> userCreatedKafkaTemplate;
     private final ModelMapper modelMapper;
 
 
@@ -37,7 +39,16 @@ public class AuthServiceImpl implements AuthService {
         User user = modelMapper.map(signupRequestDTO, User.class);
         user.setPassword(BCrypt.hash(signupRequestDTO.getPassword()));
 
-        return modelMapper.map(userRepository.save(user), UserDTO.class);
+        User savedUser = userRepository.save(user);
+
+        // send notification using kafka to the connections-service to create this user in neo4j DB
+        UserCreatedEvent userCreatedEvent = UserCreatedEvent.builder()
+                .userId(savedUser.getId())
+                .name(savedUser.getName())
+                .build();
+        userCreatedKafkaTemplate.send("user_created_topic", userCreatedEvent);
+
+        return modelMapper.map(savedUser, UserDTO.class);
     }
 
     @Override
